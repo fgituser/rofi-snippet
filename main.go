@@ -1,15 +1,15 @@
 package main
 
 import (
+	"fmt"
+	"github.com/BurntSushi/toml"
+	"github.com/labstack/gommon/log"
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
+	"path"
 	"strings"
-	"time"
-
-	"github.com/BurntSushi/toml"
-	"github.com/atotto/clipboard"
-	"github.com/labstack/gommon/log"
 )
 
 type Config struct {
@@ -29,27 +29,23 @@ type Data struct {
 var conf Config
 
 func main() {
-	Init()
+	configDefault()
 	list := listAllDesc()
 	reader := strings.NewReader(list)
-
-	preClip, err := clipboard.ReadAll()
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	err, desc := getResult("rofi -dmenu -sep '|'", reader)
 	if err != nil {
 		log.Fatal(err)
 	}
 	text := descToText(desc)
-	clipboard.WriteAll(text)
 
-	time.Sleep(30 * time.Millisecond)
-	exec.Command("sh", "-c", "xdotool key shift+Insert").Run()
-	time.Sleep(30 * time.Millisecond)
+	if err := exec.Command("sh", "-c", fmt.Sprintf(`echo -n "%v" | xclip`, text)).Run(); err != nil {
+		log.Fatal(err)
+	}
 
-	clipboard.WriteAll(preClip)
+	if err := exec.Command("sh", "-c", "xdotool key shift+Insert").Run(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func descToText(desc string) string {
@@ -97,8 +93,18 @@ func listAllDesc() string {
 	return string(all)
 }
 
-func Init() {
-	confPath := "/etc" + "/rofi-snippet" + "/config.toml"
+func readConfig(path string) {
+	if _, err := toml.DecodeFile(path, &conf); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func configDefault() {
+	usr, err := user.Current()
+	if err != nil {
+		log.Fatal()
+	}
+	confPath := path.Join(usr.HomeDir, ".config", "rofi-snippet", "config.toml")
 	if _, err := toml.DecodeFile(confPath, &conf); err != nil {
 		log.Fatal(err)
 	}
